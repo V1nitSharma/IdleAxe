@@ -1,6 +1,6 @@
 # IDLE🪓AXE — Autonomous FinOps Agent Swarm
 
-IdleAxe is an autonomous cloud optimization tool that runs a localized agent swarm to monitor infrastructure, detect idle/wasted resources, analyze engineering lifecycle context, and physically terminate inactive containers to save operational costs.
+IdleAxe is an autonomous, self-hosted FinOps agent swarm that turns passive cloud cost monitoring into a self-healing loop. Built with FastAPI and PostgreSQL, it scans infrastructure telemetry, checks context against engineering logs, and autonomously terminates abandoned zombie resources—slashing infrastructure waste with zero external fees.
 
 ```
                   ┌──────────────┐
