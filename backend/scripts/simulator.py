@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.database import SessionLocal, engine, Base
 from app.db.models import Resource, Telemetry, ActionLog
+from app.api.routes import load_chaos_state
 
 # 1. Initialize DB tables
 print("Initializing State Ledger...")
@@ -73,14 +74,19 @@ try:
                 continue
 
             # Generate Mock Telemetry:
-            # Containers 0-6 simulate "Orphaned Waste" (CPU under 5%)
-            # Containers 7-9 simulate "Critical Production" (CPU 40-85%)
-            if idx < 7:
-                cpu = random.uniform(0.1, 4.5)  
+            if load_chaos_state():
+                # CHAOS MODE: Everything is burning money. Spike the CPU!
+                cpu = random.uniform(85.0, 99.0)
+                mem = random.uniform(85.0, 99.0)
             else:
-                cpu = random.uniform(40.0, 85.0) 
-
-            mem = random.uniform(10.0, 50.0)
+                # NORMAL MODE
+                # Containers 0-6 simulate "Orphaned Waste" (CPU under 5%)
+                # Containers 7-9 simulate "Critical Production" (CPU 40-85%)
+                if idx < 7:
+                    cpu = random.uniform(0.1, 4.5)  
+                else:
+                    cpu = random.uniform(40.0, 85.0) 
+                mem = random.uniform(10.0, 50.0)
 
             telemetry = Telemetry(
                 container_id=c.id,

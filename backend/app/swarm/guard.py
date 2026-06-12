@@ -35,6 +35,13 @@ def run_guard(db: Session):
                 action="Container already missing. Synchronizing ledger."
             ))
         except Exception as e:
-            print(f"[Optimization Guard] Error on {res.container_id}: {e}")
+            error_msg = str(e)
+            print(f"[Optimization Guard] Error on {res.container_id}: {error_msg}")
+            res.status = "EXECUTION_FAILED"
+            db.add(ActionLog(
+                container_id=res.container_id, 
+                agent_name="Guard Agent", 
+                action=f"ACTUATION FAILURE: Failed to stop physical container. Error: {error_msg}. Routing back to Context Agent."
+            ))
 
     db.commit()

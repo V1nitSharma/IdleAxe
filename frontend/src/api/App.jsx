@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import StatsTicker from '../features/dashboard/StatsTicker';
+import ChaosButton from '../features/dashboard/ChaosButton';
+import PredictiveSavingsChart from '../features/dashboard/PredictiveSavingsChart';
 import ApprovalQueue from '../features/approval/ApprovalQueue';
 import AuditFeed from '../features/audit-feed/AuditFeed';
 import ActiveResources from '../features/dashboard/ActiveResources';
 import { fetchStats, fetchLogs, fetchPending, approveAxe } from './client';
+import Login from '../features/auth/Login';
 
 const MOCK_RESOURCE_NAMES = [
     'billing-service-v3', 'auth-worker-2', 'cache-memcached', 
@@ -13,9 +16,15 @@ const MOCK_RESOURCE_NAMES = [
 ];
 
 export default function App() {
+    // Authentication State
+    const [isAuthenticated, setIsAuthenticated] = useState(() => {
+        return localStorage.getItem('idleaxe_auth') === 'true';
+    });
+
     // Mode toggles
     const [isSimulatedMode, setIsSimulatedMode] = useState(true);
     const [swarmSpeed, setSwarmSpeed] = useState(3000); // interval ms for swarm cycles
+    const [isChaosMode, setIsChaosMode] = useState(false);
 
     // Swarm State
     const [resources, setResources] = useState([]);
@@ -56,26 +65,23 @@ export default function App() {
                     const pendingData = await fetchPending();
                     setPending(pendingData);
 
-                    // Infer active resources list from backend stats
-                    // Since the backend doesn't have an explicit /resources endpoint,
-                    // we'll build a synthetic list from pending approvals and mock names.
-                    const activeList = pendingData.map(p => ({
-                        container_id: p.container_id,
-                        name: p.name || 'flagged-container',
-                        status: p.status,
-                        cpuHistory: [1.2, 0.8, 1.5, 0.4, 1.1]
-                    }));
-                    // Add some fillers if backend says there are active resources
-                    const activeCount = statsData.active_containers - activeList.length;
-                    for (let i = 0; i < activeCount; i++) {
-                        activeList.push({
-                            container_id: `live-res-hash-${i}`,
-                            name: MOCK_RESOURCE_NAMES[i % MOCK_RESOURCE_NAMES.length],
-                            status: 'ACTIVE',
-                            cpuHistory: Array(5).fill(0).map(() => Math.random() * 40 + 20)
-                        });
+                    // Poll chaos mode from API to keep state synchronized
+                    try {
+                        const chaosRes = await fetch('/api/chaos');
+                        const chaosData = await chaosRes.json();
+                        setIsChaosMode(chaosData.chaos_mode);
+                    } catch (err) {
+                        console.warn("Failed to fetch chaos state:", err);
                     }
-                    setResources(activeList);
+
+                    // Fetch real database resources including CPU histories
+                    try {
+                        const resourcesRes = await fetch('/api/resources');
+                        const resourcesData = await resourcesRes.json();
+                        setResources(resourcesData);
+                    } catch (err) {
+                        console.warn("Failed to fetch real database resources:", err);
+                    }
                 } catch (e) {
                     console.error("Backend offline or unreachable. Reverting to simulator mode.", e);
                 }
@@ -92,7 +98,7 @@ export default function App() {
         return () => {
             if (simulationInterval.current) clearInterval(simulationInterval.current);
         };
-    }, [isSimulatedMode, resources, pending, logs, stats, swarmSpeed]);
+    }, [isSimulatedMode, resources, pending, logs, stats, swarmSpeed, isChaosMode]);
 
     // Helper: generate log
     const injectLog = (agent, action, containerId = null) => {
@@ -135,48 +141,79 @@ export default function App() {
     const runSimulationCycle = () => {
         if (resources.length === 0) return;
 
-        // Pick one active resource that is not pending approval yet
-        const scanCandidate = resources.find(r => r.status === 'ACTIVE');
+        // Pick one active or failed resource that is not pending approval yet
+        const scanCandidate = resources.find(r => r.status === 'ACTIVE' || r.status === 'EXECUTION_FAILED');
         if (!scanCandidate) return;
 
         // Perform Audit Agent step
-        const isWaste = scanCandidate.isWasteCandidate;
-        const cpuReading = isWaste ? Math.random() * 4 : Math.random() * 60 + 20;
+        const prevFailed = scanCandidate.status === 'EXECUTION_FAILED';
+        const isWaste = isChaosMode ? false : scanCandidate.isWasteCandidate;
+        const cpuReading = isChaosMode ? Math.random() * 14 + 85 : (isWaste ? Math.random() * 4 : Math.random() * 60 + 20);
 
-        if (isWaste) {
-            // Audit flags it
-            injectLog('Audit Agent', `Detected anomaly. CPU at ${cpuReading.toFixed(2)}%. Marked as FLAGGED.`, scanCandidate.container_id);
+        if (isWaste || prevFailed) {
+            if (prevFailed) {
+                injectLog('Audit Agent', `Re-evaluating failed container. Metrics check: CPU at ${cpuReading.toFixed(2)}%. Routing to Context for Reflection.`, scanCandidate.container_id);
+            } else {
+                injectLog('Audit Agent', `Detected anomaly. CPU at ${cpuReading.toFixed(2)}%. Marked as FLAGGED.`, scanCandidate.container_id);
+            }
             
             // Mark candidate in resources list
             setResources(prev => prev.map(r => 
-                r.container_id === scanCandidate.container_id ? { ...r, status: 'FLAGGED' } : r
+                r.container_id === scanCandidate.container_id ? { ...r, status: prevFailed ? 'EXECUTION_FAILED' : 'FLAGGED' } : r
             ));
 
             // Context Agent analyzes it immediately
             setTimeout(() => {
-                const wasteScore = Math.floor(Math.random() * 50) + 50; // 50 to 100
-                const isAutoAxe = wasteScore >= 80;
-
-                setResources(prev => prev.map(r => 
-                    r.container_id === scanCandidate.container_id 
-                        ? { ...r, status: isAutoAxe ? 'MARKED_FOR_TERMINATION' : 'PENDING_APPROVAL', waste_score: wasteScore } 
-                        : r
-                ));
-
-                if (isAutoAxe) {
-                    injectLog('Context Agent', `High waste score (${wasteScore}/100). Branch merged 5 days ago. Routing to Guard.`, scanCandidate.container_id);
-                    // Trigger physical terminate shortly after
-                    setTimeout(() => {
-                        axeContainer(scanCandidate.container_id, 'Guard Agent', 'Physical Execution Success. Container stopped.');
-                    }, 1500);
-                } else {
-                    injectLog('Context Agent', `Ambiguous score (${wasteScore}/100). Low traffic. Requesting HITL approval.`, scanCandidate.container_id);
+                if (prevFailed) {
+                    // LLM reflection: degrade to alert_only fallback
+                    setResources(prev => prev.map(r => 
+                        r.container_id === scanCandidate.container_id 
+                            ? { ...r, status: 'PENDING_APPROVAL', waste_score: 65 } 
+                            : r
+                    ));
+                    injectLog('Context Agent', `Reflected on previous execution failure (Docker stop timeout). Recommendation: ALERT ONLY (HITL).`, scanCandidate.container_id);
                     setPending(prev => [...prev, {
                         container_id: scanCandidate.container_id,
                         name: scanCandidate.name,
                         status: 'PENDING_APPROVAL',
-                        waste_score: wasteScore
+                        waste_score: 65
                     }]);
+                } else {
+                    const wasteScore = Math.floor(Math.random() * 50) + 50; // 50 to 100
+                    const isAutoAxe = wasteScore >= 80;
+
+                    setResources(prev => prev.map(r => 
+                        r.container_id === scanCandidate.container_id 
+                            ? { ...r, status: isAutoAxe ? 'MARKED_FOR_TERMINATION' : 'PENDING_APPROVAL', waste_score: wasteScore } 
+                            : r
+                    ));
+
+                    if (isAutoAxe) {
+                        injectLog('Context Agent', `High waste score (${wasteScore}/100). Branch merged 5 days ago. Routing to Guard.`, scanCandidate.container_id);
+                        
+                        // In simulated mode, let's say 25% of the time, the physical actuation fails!
+                        const willFail = Math.random() < 0.25;
+                        setTimeout(() => {
+                            if (willFail) {
+                                setResources(prev => prev.map(r => 
+                                    r.container_id === scanCandidate.container_id 
+                                        ? { ...r, status: 'EXECUTION_FAILED' } 
+                                        : r
+                                ));
+                                injectLog('Guard Agent', `ACTUATION FAILURE: Failed to stop physical container (socket timeout). Routing back to Context Agent.`, scanCandidate.container_id);
+                            } else {
+                                axeContainer(scanCandidate.container_id, 'Guard Agent', 'Physical Execution Success. Container stopped.');
+                            }
+                        }, 1500);
+                    } else {
+                        injectLog('Context Agent', `Ambiguous score (${wasteScore}/100). Low traffic. Requesting HITL approval.`, scanCandidate.container_id);
+                        setPending(prev => [...prev, {
+                            container_id: scanCandidate.container_id,
+                            name: scanCandidate.name,
+                            status: 'PENDING_APPROVAL',
+                            waste_score: wasteScore
+                        }]);
+                    }
                 }
             }, 1000);
         } else {
@@ -232,6 +269,20 @@ export default function App() {
         }
     };
 
+    const handleLoginSuccess = () => {
+        localStorage.setItem('idleaxe_auth', 'true');
+        setIsAuthenticated(true);
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('idleaxe_auth');
+        setIsAuthenticated(false);
+    };
+
+    if (!isAuthenticated) {
+        return <Login onLoginSuccess={handleLoginSuccess} />;
+    }
+
     return (
         <div className="relative min-h-screen flex flex-col">
             {/* Animated Grid Background */}
@@ -257,46 +308,83 @@ export default function App() {
                         </span>
                     </div>
 
-                    {/* Quick Demo Controller */}
-                    <div className="flex items-center gap-3 bg-obsidian-900 border border-white/5 px-4 py-2 rounded-xl">
-                        {/* Simulation Toggle */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] uppercase font-mono text-slate-500">Demo Simulation</span>
-                            <button
-                                onClick={() => setIsSimulatedMode(!isSimulatedMode)}
-                                className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${
-                                    isSimulatedMode ? 'bg-emerald-500' : 'bg-slate-800'
-                                }`}
-                            >
-                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                                    isSimulatedMode ? 'translate-x-5.5' : 'translate-x-1'
-                                }`} />
-                            </button>
-                        </div>
-
-                        {/* Action buttons inside Simulator Mode */}
-                        {isSimulatedMode && (
-                            <div className="flex gap-2 border-l border-white/5 pl-3">
+                    <div className="flex items-center gap-3 animate-fade-in">
+                        {/* Quick Demo Controller */}
+                        <div className="flex items-center gap-3 bg-obsidian-900 border border-white/5 px-4 py-2 rounded-xl">
+                            {/* Simulation Toggle */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] uppercase font-mono text-slate-500">Demo Simulation</span>
                                 <button
-                                    onClick={() => spawnMockContainers(3)}
-                                    className="text-[9px] font-mono text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500/10 px-2 py-1 rounded border border-cyan-500/10"
+                                    onClick={() => setIsSimulatedMode(!isSimulatedMode)}
+                                    className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${
+                                        isSimulatedMode ? 'bg-emerald-500' : 'bg-slate-800'
+                                    }`}
                                 >
-                                    + Spawn 3
-                                </button>
-                                <button
-                                    onClick={runSimulationCycle}
-                                    className="text-[9px] font-mono text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 px-2 py-1 rounded border border-amber-500/10"
-                                >
-                                    ⚡ Scan Cycle
+                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                        isSimulatedMode ? 'translate-x-5.5' : 'translate-x-1'
+                                    }`} />
                                 </button>
                             </div>
-                        )}
+
+                            {/* Action buttons inside Simulator Mode */}
+                            {isSimulatedMode && (
+                                <div className="flex gap-2 border-l border-white/5 pl-3">
+                                    <button
+                                        onClick={() => spawnMockContainers(3)}
+                                        className="text-[9px] font-mono text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500/10 px-2 py-1 rounded border border-cyan-500/10"
+                                    >
+                                        + Spawn 3
+                                    </button>
+                                    <button
+                                        onClick={runSimulationCycle}
+                                        className="text-[9px] font-mono text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 px-2 py-1 rounded border border-amber-500/10"
+                                    >
+                                        ⚡ Scan Cycle
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Logout Button */}
+                        <button
+                            onClick={handleLogout}
+                            className="text-[10px] font-mono text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 hover:text-rose-300 px-3 py-2 rounded-xl border border-rose-500/15 hover:border-rose-500/35 transition-all duration-300 uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
+                        >
+                            <span>🔒</span> Logout
+                        </button>
                     </div>
                 </header>
 
                 {/* Stats Ticker */}
                 <div className="mb-5">
                     <StatsTicker stats={stats} />
+                </div>
+
+                {/* System Override / Chaos Switch */}
+                <div className="mb-5">
+                    <ChaosButton 
+                        isChaos={isChaosMode} 
+                        onToggle={async (newState) => {
+                            setIsChaosMode(newState);
+                            if (!isSimulatedMode) {
+                                try {
+                                    await fetch('/api/chaos', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ enabled: newState })
+                                    });
+                                } catch (e) {
+                                    console.error("Failed to toggle chaos on backend", e);
+                                }
+                            } else {
+                                // Inject custom log in simulation mode
+                                injectLog(
+                                    'System Override', 
+                                    `CHAOS MODE ${newState ? 'ENGAGED' : 'DISENGAGED'}. Injecting artificial CPU spikes.`
+                                );
+                            }
+                        }}
+                    />
                 </div>
 
                 {/* Dashboard layout */}
@@ -310,6 +398,7 @@ export default function App() {
                                 resources={resources}
                                 onAxe={handleAxeDirect}
                                 isSimulating={isSimulatedMode}
+                                isChaosMode={isChaosMode}
                             />
                         </div>
                         {/* Approvals */}
@@ -321,9 +410,14 @@ export default function App() {
                         </div>
                     </div>
 
-                    {/* Right Column (2/5): Swarm Logs */}
-                    <div className="lg:col-span-2 min-h-0">
-                        <AuditFeed logs={logs} />
+                    {/* Right Column (2/5): Swarm Logs & ROI */}
+                    <div className="lg:col-span-2 min-h-0 flex flex-col gap-5">
+                        <div className="flex-grow min-h-[350px]">
+                            <AuditFeed logs={logs} />
+                        </div>
+                        <div className="flex-shrink-0">
+                            <PredictiveSavingsChart stats={stats} />
+                        </div>
                     </div>
 
                 </div>
