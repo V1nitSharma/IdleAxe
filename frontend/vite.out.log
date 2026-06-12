@@ -1,0 +1,29 @@
+
+> idleaxe-frontend@1.0.0 dev
+> vite --host 127.0.0.1
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m676[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5173[22m/[39m
+[2m9:23:38 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/landing/LandingPage.jsx, /src/assets/index.css[22m
+[2m9:24:13 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/ProblemSection.jsx, /src/assets/index.css[22m
+[2m9:24:54 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/FinalCTA.jsx, /src/assets/index.css[22m
+[2m9:24:54 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/FinalCTA.jsx, /src/assets/index.css[22m
+[2m9:25:40 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/FinalCTA.jsx, /src/assets/index.css[22m
+[2m9:25:40 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/FinalCTA.jsx, /src/assets/index.css[22m
+[2m9:31:08 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/HeroSection.jsx, /src/assets/index.css[22m
+[2m9:31:08 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/HeroSection.jsx, /src/assets/index.css[22m
+[2m9:31:26 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/FinalCTA.jsx, /src/assets/index.css[22m
+[2m9:31:27 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/FinalCTA.jsx, /src/assets/index.css[22m
+[2m9:37:36 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/HeroSection.jsx, /src/assets/index.css[22m
+[2m9:50:06 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/api/App.jsx, /src/assets/index.css[22m
+[2m9:50:06 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/api/App.jsx, /src/assets/index.css[22m
+[2m9:50:18 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/landing/HeroSection.jsx, /src/assets/index.css[22m
+[2m9:53:47 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/signup/SignupPage.jsx[22m
+[2m9:53:47 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/signup/SignupPage.jsx[22m
+[2m9:55:24 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/signup/SignupPage.jsx[22m
+[2m9:57:00 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/signup/SignupPage.jsx[22m
+[2m9:57:01 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/signup/SignupPage.jsx[22m
+[2m9:59:03 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/signup/SignupPage.jsx[22m
+[2m9:59:03 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/signup/SignupPage.jsx[22m

@@ -1,26 +1,7 @@
 import { useEffect, useState } from 'react';
 
-const getBlastRadius = (name) => {
-    if (!name) return [];
-    const lowerName = name.toLowerCase();
-    const dependents = [];
-    if (lowerName.includes('redis') || lowerName.includes('session')) {
-        dependents.push('auth-worker');
-    }
-    if (lowerName.includes('payment') || lowerName.includes('router')) {
-        dependents.push('billing-service');
-    }
-    if (lowerName.includes('memcached') || lowerName.includes('cache')) {
-        dependents.push('analytics-pipeline');
-    }
-    if (lowerName.includes('gateway') || lowerName.includes('email')) {
-        dependents.push('pdf-generator');
-    }
-    return dependents;
-};
-
 // Single Resource Card with live sparkline and cost accumulator
-function ResourceCard({ resource, onAxe, isSimulating, isChaosMode }) {
+function ResourceCard({ resource, onAxe, isSimulating }) {
     const [history, setHistory] = useState(resource.cpuHistory || Array(10).fill(5));
     const [cpu, setCpu] = useState(resource.cpuHistory ? resource.cpuHistory[resource.cpuHistory.length - 1] : 5);
     const [mem, setMem] = useState(32.4);
@@ -35,10 +16,7 @@ function ResourceCard({ resource, onAxe, isSimulating, isChaosMode }) {
         // Update telemetry every second to make it feel super dynamic
         const telemetryInterval = setInterval(() => {
             let nextCpu;
-            if (isChaosMode) {
-                // Spike CPU to 85% - 99%
-                nextCpu = Math.max(85, Math.min(99.9, cpu + (Math.random() * 4 - 2)));
-            } else if (isSimulating) {
+            if (isSimulating) {
                 // If it's a simulated low-use container, fluctuate under 5%
                 if (resource.id && parseInt(resource.id.replace(/\D/g, '')) % 3 !== 0) {
                     nextCpu = Math.max(0.1, Math.min(4.9, cpu + (Math.random() * 2 - 1)));
@@ -51,18 +29,14 @@ function ResourceCard({ resource, onAxe, isSimulating, isChaosMode }) {
 
             setCpu(parseFloat(nextCpu.toFixed(1)));
             setHistory(prev => [...prev.slice(1), nextCpu]);
-            setMem(prev => {
-                const limitMin = isChaosMode ? 85 : 10;
-                const limitMax = isChaosMode ? 99 : 90;
-                return Math.max(limitMin, Math.min(limitMax, parseFloat((prev + (Math.random() * 2 - 1)).toFixed(1))));
-            });
+            setMem(prev => Math.max(10, Math.min(90, parseFloat((prev + (Math.random() * 2 - 1)).toFixed(1)))));
         }, 1000);
 
         return () => {
             clearInterval(costInterval);
             clearInterval(telemetryInterval);
         };
-    }, [cpu, isSimulating, resource.id, isChaosMode]);
+    }, [cpu, isSimulating, resource.id]);
 
     // Build the SVG sparkline points
     const points = history.map((val, idx) => {
@@ -72,15 +46,10 @@ function ResourceCard({ resource, onAxe, isSimulating, isChaosMode }) {
         return `${x},${y}`;
     }).join(' ');
 
-    const isFailed = resource.status === 'EXECUTION_FAILED';
     const isHighWaste = cpu < 5.0;
 
     return (
-        <div className={`border rounded-xl p-3.5 transition-all duration-300 flex flex-col justify-between ${
-            isFailed
-                ? 'bg-rose-500/[0.03] border-rose-500/20 hover:border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.04)]'
-                : 'bg-white/[0.015] border-white/5 hover:border-white/10'
-        }`}>
+        <div className="bg-white/[0.015] border border-white/5 rounded-xl p-3.5 hover:border-white/10 transition-all duration-300 flex flex-col justify-between">
             <div>
                 {/* Header */}
                 <div className="flex justify-between items-start mb-2.5">
@@ -93,13 +62,11 @@ function ResourceCard({ resource, onAxe, isSimulating, isChaosMode }) {
                         </p>
                     </div>
                     <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded ${
-                        isFailed
-                            ? 'bg-rose-500/25 text-rose-400 border border-rose-500/40 font-bold animate-pulse'
-                            : isHighWaste
-                                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/10 animate-pulse'
-                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10'
+                        isHighWaste
+                            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/10 animate-pulse'
+                            : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10'
                     }`}>
-                        {isFailed ? '⚠️ EXECUTION FAILURE' : isHighWaste ? 'WASTE ANOMALY' : 'OPTIMAL'}
+                        {isHighWaste ? 'WASTE ANOMALY' : 'OPTIMAL'}
                     </span>
                 </div>
 
@@ -107,13 +74,13 @@ function ResourceCard({ resource, onAxe, isSimulating, isChaosMode }) {
                 <div className="grid grid-cols-2 gap-2 mb-3 bg-black/20 p-2 rounded-lg border border-white/[0.02]">
                     <div>
                         <div className="text-[9px] uppercase tracking-wider text-slate-600 font-semibold">CPU Usage</div>
-                        <div className={`font-mono text-xs font-bold ${isFailed ? 'text-rose-500 font-black' : isHighWaste ? 'text-rose-400' : 'text-slate-300'}`}>
+                        <div className={`font-mono text-xs font-bold ${isHighWaste ? 'text-rose-400' : 'text-slate-300'}`}>
                             {cpu}%
                         </div>
                     </div>
                     <div>
                         <div className="text-[9px] uppercase tracking-wider text-slate-600 font-semibold">Memory</div>
-                        <div className={`font-mono text-xs font-semibold ${isFailed ? 'text-rose-400' : 'text-slate-300'}`}>{mem}%</div>
+                        <div className="font-mono text-xs text-slate-300 font-semibold">{mem}%</div>
                     </div>
                 </div>
 
@@ -125,22 +92,12 @@ function ResourceCard({ resource, onAxe, isSimulating, isChaosMode }) {
                         {/* Sparkline Path */}
                         <polyline
                             fill="none"
-                            stroke={isFailed ? '#ef4444' : isHighWaste ? '#f43f5e' : '#22d3ee'}
+                            stroke={isHighWaste ? '#f43f5e' : '#22d3ee'}
                             strokeWidth="1.5"
                             points={points}
                         />
                     </svg>
                 </div>
-
-                {/* Blast Radius Warning */}
-                {getBlastRadius(resource.name).length > 0 && (
-                    <div className="mt-1 mb-2.5 p-1.5 rounded bg-amber-500/[0.03] border border-amber-500/10 text-[8px] text-amber-500/80 font-mono flex items-center gap-1.5">
-                        <span className="flex-shrink-0 text-[9px]">⚠️</span>
-                        <span className="leading-tight">
-                            <strong>Blast Radius:</strong> Deletion will orphan <code>{getBlastRadius(resource.name).join(', ')}</code>
-                        </span>
-                    </div>
-                )}
             </div>
 
             {/* Footer / Costs */}
@@ -162,7 +119,7 @@ function ResourceCard({ resource, onAxe, isSimulating, isChaosMode }) {
     );
 }
 
-export default function ActiveResources({ resources, onAxe, isSimulating, isChaosMode }) {
+export default function ActiveResources({ resources, onAxe, isSimulating }) {
     return (
         <div className="glass-card p-5 h-full flex flex-col min-h-0">
             {/* Header */}
@@ -198,7 +155,6 @@ export default function ActiveResources({ resources, onAxe, isSimulating, isChao
                                 resource={res}
                                 onAxe={onAxe}
                                 isSimulating={isSimulating}
-                                isChaosMode={isChaosMode}
                             />
                         ))}
                     </div>
