@@ -123,3 +123,5 @@ python scripts/simulator.py
 - **Demo Simulation Mode**: Run the swarm entirely inside the client browser. Create simulated nodes, trigger scans, and witness automated terminations without requiring active Docker/PostgreSQL servers.
 - **Dynamic Sparklines**: Live telemetry tracking with SVG-based fluctuating CPU load graphs.
 - **Continuous Cost Tracker**: Watch real-time financial waste gather on-screen before the swarm executes an axe action.
+be
+
