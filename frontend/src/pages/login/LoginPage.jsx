@@ -51,6 +51,9 @@ export default function LoginPage() {
             });
 
             if (res.ok) {
+                const data = await res.json();
+                localStorage.setItem('idleaxe_auth', 'true');
+                localStorage.setItem('idleaxe_user', data.name || username);
                 navigate('/dashboard');
             } else {
                 const data = await res.json().catch(() => ({}));
@@ -59,6 +62,8 @@ export default function LoginPage() {
         } catch (err) {
             console.warn("Backend offline or unreachable. Using fallback local authentication.");
             if (username === 'admin' && password === 'idleaxe') {
+                localStorage.setItem('idleaxe_auth', 'true');
+                localStorage.setItem('idleaxe_user', 'Admin Operator');
                 navigate('/dashboard');
             } else {
                 triggerError('Invalid credentials. (Try admin / idleaxe)');

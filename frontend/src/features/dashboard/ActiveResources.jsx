@@ -119,7 +119,7 @@ function ResourceCard({ resource, onAxe, isSimulating }) {
     );
 }
 
-export default function ActiveResources({ resources, onAxe, isSimulating }) {
+export default function ActiveResources({ resources, onAxe, isSimulating, onSpawn }) {
     return (
         <div className="glass-card p-5 h-full flex flex-col min-h-0">
             {/* Header */}
@@ -131,9 +131,26 @@ export default function ActiveResources({ resources, onAxe, isSimulating }) {
                     </span>
                     Active Resources Swarm
                 </h3>
-                <span className="text-[10px] font-mono text-cyan-600/60 bg-cyan-500/5 px-2 py-0.5 rounded-full border border-cyan-500/10">
-                    {resources.length} active
-                </span>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={async () => {
+                            try {
+                                const res = await fetch('/api/spawn', { method: 'POST' });
+                                if (res.ok && onSpawn) {
+                                    onSpawn();
+                                }
+                            } catch (err) {
+                                console.error("Failed to spawn containers:", err);
+                            }
+                        }}
+                        className="text-[10px] font-mono text-cyan-400 hover:text-white bg-cyan-500/5 hover:bg-cyan-500/10 px-2.5 py-1 rounded border border-cyan-500/25 transition-all duration-200 cursor-pointer"
+                    >
+                        + Provision 3 Containers
+                    </button>
+                    <span className="text-[10px] font-mono text-cyan-600/60 bg-cyan-500/5 px-2 py-0.5 rounded-full border border-cyan-500/10">
+                        {resources.length} active
+                    </span>
+                </div>
             </div>
 
             {/* Grid */}

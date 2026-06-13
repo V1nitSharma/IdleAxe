@@ -1,12 +1,23 @@
 import os
+import hashlib
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
 from app.db.database import SessionLocal
-from app.db.models import Resource, Telemetry, ActionLog
+from app.db.models import Resource, Telemetry, ActionLog, User
 
 router = APIRouter()
+
+class SignupRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+def hash_password(password: str) -> str:
+    # Deterministic salt for operator hashing
+    salted = password + "idleaxe_salt_999"
+    return hashlib.sha256(salted.encode()).hexdigest()
 
 # Global state / process synchronization for Chaos Mode
 CHAOS_STATE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".chaos_mode")
@@ -72,14 +83,14 @@ def get_pending_approvals(db: Session = Depends(get_db)):
 
 @router.post("/approve/{container_id}")
 def approve_termination(container_id: str, db: Session = Depends(get_db)):
-    """Allows the human to hit the 'Approve Axe' button in React."""
+    """Allows the human to hit the 'Approve Axe' button in React or directly Axe a container."""
     resource = db.query(Resource).filter(Resource.container_id == container_id).first()
     
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
         
-    if resource.status != "PENDING_APPROVAL":
-        raise HTTPException(status_code=400, detail="Resource is not pending approval")
+    if resource.status == "TERMINATED":
+        raise HTTPException(status_code=400, detail="Resource is already terminated")
         
     # Upgrade the status so the Guard Agent kills it on the next cycle
     resource.status = "MARKED_FOR_TERMINATION"
@@ -88,11 +99,36 @@ def approve_termination(container_id: str, db: Session = Depends(get_db)):
     db.add(ActionLog(
         container_id=container_id,
         agent_name="Human Override",
-        action="Manual termination approved via Dashboard. Routing to Guard."
+        action=f"Manual termination of {resource.name or container_id[:8]} authorized via Dashboard. Routing to Guard."
     ))
     db.commit()
     
     return {"status": "success", "message": "Execution authorized."}
+
+@router.post("/reject/{container_id}")
+def reject_termination(container_id: str, db: Session = Depends(get_db)):
+    """Allows the human to hit the 'Reject' button in React."""
+    resource = db.query(Resource).filter(Resource.container_id == container_id).first()
+    
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+        
+    if resource.status != "PENDING_APPROVAL":
+        raise HTTPException(status_code=400, detail="Resource is not pending approval")
+        
+    # Reset status back to ACTIVE
+    resource.status = "ACTIVE"
+    resource.waste_score = 15
+    
+    # Log the human intervention
+    db.add(ActionLog(
+        container_id=container_id,
+        agent_name="Human Override",
+        action=f"Manual termination of {resource.name or container_id[:8]} rejected via Dashboard. Resetting status to ACTIVE."
+    ))
+    db.commit()
+    
+    return {"status": "success", "message": "Rejection authorized."}
 
 @router.get("/chaos")
 def get_chaos_state():
@@ -146,12 +182,85 @@ class LoginRequest(BaseModel):
     password: str
 
 @router.post("/login")
-def login(request: LoginRequest):
-    """Simple admin credentials verification for the command plane."""
+def login(request: LoginRequest, db: Session = Depends(get_db)):
+    """Simple admin or database credentials verification for the command plane."""
     correct_username = os.getenv("ADMIN_USERNAME", "admin")
     correct_password = os.getenv("ADMIN_PASSWORD", "idleaxe")
     
+    # 1. Fallback admin check
     if request.username == correct_username and request.password == correct_password:
-        return {"status": "success", "message": "Authenticated successfully"}
+        return {"status": "success", "message": "Authenticated successfully", "name": "Admin Operator"}
         
+    # 2. Database user check
+    user = db.query(User).filter(User.email == request.username).first()
+    if not user:
+        # Check by name in case username field was used for name
+        user = db.query(User).filter(User.name == request.username).first()
+        
+    if user:
+        hashed_input = hash_password(request.password)
+        if user.hashed_password == hashed_input:
+            return {"status": "success", "message": "Authenticated successfully", "name": user.name}
+            
     raise HTTPException(status_code=401, detail="Invalid username or password")
+
+@router.post("/signup")
+def signup(request: SignupRequest, db: Session = Depends(get_db)):
+    """Registers a new operator and hashes their credentials."""
+    existing_user = db.query(User).filter(User.email == request.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email is already registered")
+        
+    hashed = hash_password(request.password)
+    new_user = User(
+        name=request.name,
+        email=request.email,
+        hashed_password=hashed
+    )
+    db.add(new_user)
+    db.commit()
+    return {"status": "success", "message": "User registered successfully", "name": new_user.name}
+
+@router.post("/spawn")
+def spawn_containers(db: Session = Depends(get_db)):
+    """Spawns 3 Alpine containers in Docker and registers them in the database."""
+    import docker
+    import random
+    
+    try:
+        client = docker.from_env()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cannot connect to Docker: {e}")
+        
+    spawned_names = []
+    for _ in range(3):
+        suffix = random.randint(100, 999)
+        name = f"idleaxe-demo-{suffix}"
+        
+        try:
+            container = client.containers.run(
+                "alpine",
+                "tail -f /dev/null",
+                detach=True,
+                name=name
+            )
+            
+            db_res = Resource(
+                container_id=container.id,
+                name=container.name,
+                status="ACTIVE"
+            )
+            db.add(db_res)
+            spawned_names.append(container.name)
+            
+            # Log the provisioning event
+            db.add(ActionLog(
+                container_id=container.id,
+                agent_name="System",
+                action=f"Provisioned demo container '{container.name}' via Command Dashboard."
+            ))
+        except Exception as e:
+            print(f"Error spawning container: {e}")
+            
+    db.commit()
+    return {"status": "success", "message": f"Spawned containers: {', '.join(spawned_names)}"}

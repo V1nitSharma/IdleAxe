@@ -1,9 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { LayoutDashboard, Server, Activity, CheckSquare, BarChart2, Settings } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Server, Activity, CheckSquare, BarChart2, Settings, LogOut } from 'lucide-react';
 import IdleAxeLogo from './IdleAxeLogo';
 
 export default function Sidebar() {
+    const navigate = useNavigate();
     const navItems = [
         { icon: LayoutDashboard, label: 'Dashboard', active: true },
         { icon: Server, label: 'Resources' },
@@ -12,6 +13,20 @@ export default function Sidebar() {
         { icon: BarChart2, label: 'Analytics' },
         { icon: Settings, label: 'Settings' }
     ];
+
+    const userName = localStorage.getItem('idleaxe_user') || 'Admin User';
+    const userInitials = userName
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase();
+
+    const handleLogout = () => {
+        localStorage.removeItem('idleaxe_auth');
+        localStorage.removeItem('idleaxe_user');
+        navigate('/login');
+    };
 
     return (
         <aside className="w-20 lg:w-64 flex flex-col h-screen bg-white border-r border-gray-200 transition-all duration-300 z-20">
@@ -38,14 +53,25 @@ export default function Sidebar() {
             </nav>
 
             <div className="p-4 border-t border-gray-100">
-                <div className="flex items-center justify-center lg:justify-start p-2">
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 border-2 border-white shadow-sm flex-shrink-0 flex items-center justify-center text-emerald-700 text-xs font-bold">
-                        A
+                <div className="flex items-center justify-between p-2">
+                    <div className="flex items-center justify-start min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 border-2 border-white shadow-sm flex-shrink-0 flex items-center justify-center text-emerald-700 text-xs font-bold">
+                            {userInitials}
+                        </div>
+                        <div className="ml-3 hidden lg:block text-left min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate max-w-[110px]" title={userName}>
+                                {userName}
+                            </p>
+                            <p className="text-xs text-gray-500">Cloud Operations</p>
+                        </div>
                     </div>
-                    <div className="ml-3 hidden lg:block text-left">
-                        <p className="text-sm font-medium text-gray-900">Admin User</p>
-                        <p className="text-xs text-gray-500">Cloud Operations</p>
-                    </div>
+                    <button
+                        onClick={handleLogout}
+                        className="hidden lg:block text-gray-400 hover:text-rose-500 transition-colors p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer"
+                        title="Logout"
+                    >
+                        <LogOut className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
         </aside>

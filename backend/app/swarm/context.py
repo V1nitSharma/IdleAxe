@@ -57,9 +57,14 @@ def send_chatops_ping(container_name: str, container_id: str, action: str, reaso
         log.error("[ChatOps] Webhook dispatch error: %s", e)
 
 # ─── Constants ──────────────────────────────────────────────────────────────
-MODEL          = "mistralai/mistral-nemotron"
+MODEL          = "meta/llama-3.1-8b-instruct"
+MODEL_FALLBACKS = [
+    "nvidia/llama-3.1-nemotron-70b-instruct",
+    "meta/llama-3.1-70b-instruct",
+    "mistralai/mistral-nemotron"
+]
 MAX_TOKENS     = 2048
-MAX_RPM        = 30           # Nvidia/LLM rate limit reference ceiling
+MAX_RPM        = 40           # Nvidia/LLM rate limit reference ceiling
 SAFETY_MARGIN  = 0.70         # Use <= 70% of quota
 MAX_RETRIES    = 3            # Retry attempts on transient failures
 BASE_BACKOFF   = 2.0          # Seconds; doubles each retry (2 -> 4 -> 8)
@@ -268,27 +273,37 @@ class ContextAgent:
 
     def _call_llm_batch(self, containers: list[dict]) -> list[dict]:
         prompt = build_batch_prompt(containers)
-        response = self._client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2,
-            max_tokens=MAX_TOKENS,
-        )
-        raw = response.choices[0].message.content.strip()
-        clean = _strip_json_fences(raw)
-
-        try:
-            actions = json.loads(clean)
-            if not isinstance(actions, list):
-                raise ValueError("LLM response must be a JSON list.")
-            log.info("  ✓ LLM returned %d action(s) for %d container(s).", len(actions), len(containers))
-            return actions
-        except Exception as exc:
-            log.error("  JSON parse error: %s. Raw content: %s", exc, raw)
-            raise exc
+        
+        models_to_try = [MODEL] + MODEL_FALLBACKS
+        last_error = None
+        
+        for model in models_to_try:
+            try:
+                log.info("  Attempting LLM batch call using model: %s", model)
+                response = self._client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.2,
+                    max_tokens=MAX_TOKENS,
+                )
+                raw = response.choices[0].message.content.strip()
+                clean = _strip_json_fences(raw)
+                
+                actions = json.loads(clean)
+                if not isinstance(actions, list):
+                    raise ValueError("LLM response must be a JSON list.")
+                log.info("  ✓ LLM returned %d action(s) using model %s.", len(actions), model)
+                return actions
+            except Exception as exc:
+                last_error = exc
+                log.warning("  Model %s invocation failed: %s. Trying next fallback model...", model, exc)
+                continue
+                
+        log.error("  All configured models failed. Last error: %s", last_error)
+        raise last_error
 
     @staticmethod
     def _fallback_actions(containers: list[dict]) -> list[dict]:

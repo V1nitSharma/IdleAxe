@@ -19,3 +19,15 @@ export const approveAxe = async (containerId) => {
     });
     return res.json();
 };
+
+export const fetchResources = async () => {
+    const res = await fetch('/api/resources');
+    return res.json();
+};
+
+export const rejectAxe = async (containerId) => {
+    const res = await fetch(`/api/reject/${containerId}`, {
+        method: 'POST',
+    });
+    return res.json();
+};

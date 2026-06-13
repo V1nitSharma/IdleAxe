@@ -27,15 +27,41 @@ export default function SignupPage() {
         email: '',
         password: '',
     });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
 
     const updateField = (event) => {
         const { name, value } = event.target;
         setForm((current) => ({ ...current, [name]: value }));
     };
 
-    const handleSubmit = (event) => {
+    const handleSubmit = async (event) => {
         event.preventDefault();
-        navigate('/dashboard');
+        setError(null);
+        setLoading(true);
+
+        try {
+            const res = await fetch('/api/signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form)
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                localStorage.setItem('idleaxe_auth', 'true');
+                localStorage.setItem('idleaxe_user', data.name || form.name);
+                navigate('/dashboard');
+            } else {
+                const data = await res.json().catch(() => ({}));
+                setError(data.detail || 'Registration failed. Please try again.');
+            }
+        } catch (err) {
+            console.error("Signup error:", err);
+            setError('Server connection error. Please verify the backend is running.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -109,6 +135,14 @@ export default function SignupPage() {
                                 <p className="text-sm text-white/50">Three fields. One minute. No payment needed.</p>
                             </div>
 
+                            {/* Error Box */}
+                            {error && (
+                                <div className="mb-6 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold flex items-center gap-2 animate-fade-in">
+                                    <span className="text-sm">⚠️</span>
+                                    <span>{error}</span>
+                                </div>
+                            )}
+
                             <div className="space-y-5">
                                 <label className="block">
                                     <span className="mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-white/50">Full Name</span>
@@ -116,6 +150,7 @@ export default function SignupPage() {
                                         <UserRound className="h-4 w-4 text-white/40" />
                                         <input
                                             required
+                                            disabled={loading}
                                             name="name"
                                             value={form.name}
                                             onChange={updateField}
@@ -131,6 +166,7 @@ export default function SignupPage() {
                                         <Mail className="h-4 w-4 text-white/40" />
                                         <input
                                             required
+                                            disabled={loading}
                                             type="email"
                                             name="email"
                                             value={form.email}
@@ -147,6 +183,7 @@ export default function SignupPage() {
                                         <LockKeyhole className="h-4 w-4 text-white/40" />
                                         <input
                                             required
+                                            disabled={loading}
                                             minLength={8}
                                             type="password"
                                             autoComplete="new-password"
@@ -162,9 +199,10 @@ export default function SignupPage() {
 
                             <button
                                 type="submit"
-                                className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#00e676] hover:bg-[#39ff14] text-black px-6 py-3.5 text-sm font-bold shadow-md transition-all hover:shadow-lg hover:-translate-y-0.5"
+                                disabled={loading}
+                                className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#00e676] hover:bg-[#39ff14] disabled:bg-[#00e676]/40 text-black px-6 py-3.5 text-sm font-bold shadow-md transition-all hover:shadow-lg hover:-translate-y-0.5"
                             >
-                                Create Account
+                                {loading ? 'Creating Account...' : 'Create Account'}
                                 <ArrowRight className="h-4 w-4" />
                             </button>
 
