@@ -16,8 +16,8 @@ export default function Sidebar() {
     return (
         <aside className="w-20 lg:w-64 flex flex-col h-screen bg-white border-r border-gray-200 transition-all duration-300 z-20">
             <Link to="/" className="h-16 flex items-center justify-center lg:justify-start lg:px-6 border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                <IdleAxeLogo size={28} showText={false} className="lg:hidden" />
-                <span className="hidden lg:block"><IdleAxeLogo size={28} /></span>
+                <IdleAxeLogo size={28} showText={false} lightBg={true} className="lg:hidden" />
+                <span className="hidden lg:block"><IdleAxeLogo size={28} lightBg={true} /></span>
             </Link>
 
             <nav className="flex-1 py-6 px-3 flex flex-col gap-1.5">
