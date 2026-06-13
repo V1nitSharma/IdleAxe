@@ -10,7 +10,7 @@
 }
 
 body {
-    background-color: #04060b;
+    background-color: #0a0a0a;
     color: #f1f5f9;
     font-family: 'Inter', system-ui, sans-serif;
     overflow-x: hidden;
@@ -321,4 +321,70 @@ body {
     border-color: rgba(52, 211, 153, 0.5);
     box-shadow: 0 0 15px rgba(52, 211, 153, 0.25);
     background: rgba(15, 22, 41, 0.8);
+}
+
+/* ===== LANDING PAGE REDESIGN STYLES ===== */
+.bg-near-black {
+    background-color: #0a0a0a;
+}
+
+/* Base landing page transitions */
+.transition-smooth {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom modal styling */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background-color: rgba(4, 4, 4, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    animation: fadeInOverlay 0.3s ease-out forwards;
+}
+
+.modal-wrapper {
+    animation: scaleInModal 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes fadeInOverlay {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes scaleInModal {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Custom hamburger menu animation */
+.hamburger-line {
+    display: block;
+    width: 24px;
+    height: 2px;
+    background-color: white;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.hamburger-line.open:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+}
+
+.hamburger-line.open:nth-child(2) {
+    opacity: 0;
+}
+
+.hamburger-line.open:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
 }
